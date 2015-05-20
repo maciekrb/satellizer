@@ -3,6 +3,13 @@
  * (c) 2015 Sahat Yalkabov
  * License: MIT
  */
+/*
+  * login
+  * new-session
+  * logout
+  * new-registration
+  * unauthorized
+*/
 (function(window, angular, undefined) {
   'use strict';
 
@@ -106,6 +113,59 @@
           display: 'popup',
           type: '2.0',
           popupOptions: { width: 500, height: 560 }
+        }
+      }
+    })
+    .factory('satellizer.messaging', function ($timeout) {
+      var _callbacks = {};
+
+      return {
+        on: function (namespace, event, callback, name) {
+          if (name) {
+            callback._cbName = name;
+          };
+          if (!_callbacks[namespace]) {
+            _callbacks[namespace] = {};
+            _callbacks[namespace][event] = [callback];
+          } else if (!_callbacks[namespace][event]) {
+            _callbacks[namespace][event] = [callback];
+          } else {
+            _callbacks[namespace][event].push(callback);
+          }
+          return this;
+        },
+        off: function (namespace, event, callbackOrName) {
+          if (!_callbacks[namespace] || !_callbacks[namespace][event]) {
+            return this;
+          }
+          var idx;
+          if (angular.isFunction(callbackOrName)) {
+            idx = _callbacks[namespace][event].indexOf(callbackOrName);
+          } else if (angular.isString(callbackOrName)) {
+            var cb = _.find(_callbacks[namespace][event], function (cb) {
+              return cb._cbName && cb._cbName === callbackOrName;
+            });
+            idx = _callbacks[namespace][event].indexOf(cb);
+          }
+          if (idx < 0) {
+            return this;
+          };
+          _callbacks[namespace][event].splice(idx, 1);
+          return this;
+        },
+        trigger: function (namespace, event/*, args */) {
+          if (!_callbacks[namespace] || !_callbacks[namespace][event]) {
+            return this;
+          };
+          var args = Array.prototype.splice.call(arguments, 2)
+            , cbs = _callbacks[namespace][event];
+          $timeout(function() {
+            for (var i = 0, ii = cbs.length; i < ii; i++) {
+              var cb = cbs[i];
+              cb.apply(null, args);
+            }
+          });
+          return this;
         }
       }
     })
@@ -220,7 +280,8 @@
         'satellizer.shared',
         'satellizer.local',
         'satellizer.oauth',
-        function($q, shared, local, oauth) {
+        'satellizer.messaging',
+        function($q, shared, local, oauth, messaging) {
           var $auth = {};
 
           $auth.authenticate = function(name, userData) {
@@ -271,6 +332,18 @@
             return shared.setStorage(type);
           };
 
+          // Event subscribe
+          $auth.on = function(event, callback, name){
+            messaging.on('satellizer', event, callback, name);
+            return this;
+          };
+
+          // Event unsubscribe
+          $auth.off = function(event, callbackOrName){
+            messaging.off('satellizer', event, callbackOrName);
+            return this;
+          };
+
           return $auth;
         }];
 
@@ -281,7 +354,8 @@
       '$location',
       'satellizer.config',
       'satellizer.storage',
-      function($q, $window, $location, config, storage) {
+      'satellizer.messaging',
+      function($q, $window, $location, config, storage, messaging) {
         var shared = {};
         var tokenName = config.tokenPrefix ? config.tokenPrefix + '_' + config.tokenName : config.tokenName;
 
@@ -341,18 +415,24 @@
             if (token.split('.').length === 3) {
               var base64Url = token.split('.')[1];
               var base64 = base64Url.replace('-', '+').replace('_', '/');
-              var exp = JSON.parse($window.atob(base64)).exp;
-              if (exp) {
-                return Math.round(new Date().getTime() / 1000) <= exp;
+              var jtok = JSON.parse($window.atob(base64));
+              if (jtok.exp) {
+                var token_valid = Math.round(new Date().getTime() / 1000) <= jtok.exp;
+                if(token_valid === false){
+                  messaging.trigger('satellizer', 'satellizer:notauthed', jtok);
+                }
+                return token_valid;
               }
             }
             return true;
           }
+          messaging.trigger('satellizer', 'satellizer:notauthed', null);
           return false;
         };
 
         shared.logout = function(redirect) {
           storage.remove(tokenName);
+          messaging.trigger('satellizer', 'satellizer:logout', tokenName);
 
           if (config.logoutRedirect && !redirect) {
             $location.url(config.logoutRedirect);
@@ -377,7 +457,8 @@
       'satellizer.shared',
       'satellizer.Oauth1',
       'satellizer.Oauth2',
-      function($q, $http, config, shared, Oauth1, Oauth2) {
+      'satellizer.messaging',
+      function($q, $http, config, shared, Oauth1, Oauth2, messaging) {
         var oauth = {};
 
         oauth.authenticate = function(name, redirect, userData) {
@@ -388,9 +469,13 @@
             .then(function(response) {
               shared.setToken(response, redirect);
               deferred.resolve(response);
+              messaging.trigger('satellizer', 'satellizer:oauth-login-success', response);
+              messaging.trigger('satellizer', 'satellizer:login-success', response);
             })
             .catch(function(error) {
               deferred.reject(error);
+              messaging.trigger('satellizer', 'satellizer:oauth-login-error', error);
+              messaging.trigger('satellizer', 'satellizer:login-error', error);
             });
 
           return deferred.promise;
@@ -413,7 +498,8 @@
       'satellizer.utils',
       'satellizer.shared',
       'satellizer.config',
-      function($q, $http, $location, utils, shared, config) {
+      'satellizer.messaging',
+      function($q, $http, $location, utils, shared, config, messaging) {
         var local = {};
 
         local.login = function(user, redirect) {
@@ -421,6 +507,8 @@
           return $http.post(loginUrl, user)
             .then(function(response) {
               shared.setToken(response, redirect);
+              messaging.trigger('satellizer', 'satellizer:local-login-success', response);
+              messaging.trigger('satellizer', 'satellizer:login-success', response);
               return response;
             });
         };
@@ -429,6 +517,7 @@
           var signupUrl = config.baseUrl ? utils.joinUrl(config.baseUrl, config.signupUrl) : config.signupUrl;
           return $http.post(signupUrl, user)
             .then(function(response) {
+              messaging.trigger('satellizer', 'satellizer:signup', response);
               if (config.loginOnSignup) {
                 shared.setToken(response);
               } else if (config.signupRedirect) {
