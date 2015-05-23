@@ -16,6 +16,7 @@
   angular.module('satellizer', [])
     .constant('satellizer.config', {
       httpInterceptor: true,
+      httpEventsInterceptor: true,
       loginOnSignup: true,
       baseUrl: '/',
       loginRedirect: '/',
@@ -423,16 +424,11 @@
               var base64 = base64Url.replace('-', '+').replace('_', '/');
               var jtok = JSON.parse($window.atob(base64));
               if (jtok.exp) {
-                var token_valid = Math.round(new Date().getTime() / 1000) <= jtok.exp;
-                if(token_valid === false){
-                  messaging.trigger('satellizer', 'satellizer:notauthed', jtok);
-                }
-                return token_valid;
+                return Math.round(new Date().getTime() / 1000) <= jtok.exp;
               }
             }
             return true;
           }
-          messaging.trigger('satellizer', 'satellizer:notauthed', null);
           return false;
         };
 
@@ -1049,6 +1045,35 @@
       }])
     .config(['$httpProvider', function($httpProvider) {
       $httpProvider.interceptors.push('satellizer.interceptor');
+    }])
+    .factory('satellizer.authinterceptor', [
+      '$q',
+      'satellizer.config',
+      'satellizer.messaging', 
+      function authinterceptor($q, config, messaging) {
+        /**
+        * Set to true to intercept 401 Unauthorized responses
+        * Based on angular_devise interceptor by jridgewell 
+        * (https://github.com/cloudspace/angular_devise)
+        */
+
+        // Only for intercepting 401 requests.
+        return {
+          responseError: function(response) {
+            if (response.status === 401) {
+              var deferred = $q.defer();
+              messaging.trigger('satellizer', 'satellizer:notauthed', response, deferred);
+              return deferred.promise;
+            }
+
+            return $q.reject(response);
+          }
+        };
+    }])
+    .config(['$httpProvider', 'satellizer.config', function($httpProvider, config) {
+      if(config.httpEventsInterceptor === true){
+        $httpProvider.interceptors.push('satellizer.authinterceptor');
+      }
     }]);
 
 })(window, window.angular);
