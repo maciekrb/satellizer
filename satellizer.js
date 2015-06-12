@@ -131,7 +131,7 @@
         on: function (namespace, event, callback, name) {
           if (name) {
             callback._cbName = name;
-          };
+          }
           if (!_callbacks[namespace]) {
             _callbacks[namespace] = {};
             _callbacks[namespace][event] = [callback];
@@ -157,25 +157,26 @@
           }
           if (idx < 0) {
             return this;
-          };
+          }
           _callbacks[namespace][event].splice(idx, 1);
           return this;
         },
         trigger: function (namespace, event/*, args */) {
           if (!_callbacks[namespace] || !_callbacks[namespace][event]) {
             return this;
-          };
+          }
           var args = Array.prototype.splice.call(arguments, 2)
             , cbs = _callbacks[namespace][event];
           $timeout(function() {
-            for (var i = 0, ii = cbs.length; i < ii; i++) {
-              var cb = cbs[i];
+            var cb, i;
+            for (i = 0; i < cbs.length; i++) {
+              cb = cbs[i];
               cb.apply(null, args);
             }
           });
           return this;
         }
-      }
+      };
     })
     .provider('$auth', ['satellizer.config', function(config) {
       Object.defineProperties(this, {
@@ -484,11 +485,13 @@
         };
 
         oauth.unlink = function(provider) {
+          var res;
           if (config.unlinkMethod === 'get') {
-            return $http.get(config.unlinkUrl + provider);
+            res = $http.get(config.unlinkUrl + provider);
           } else if (config.unlinkMethod === 'post') {
-            return $http.post(config.unlinkUrl, provider);
+            res = $http.post(config.unlinkUrl, provider);
           }
+          return res;
         };
 
         return oauth;
@@ -572,7 +575,7 @@
               storage.set(stateName, defaults.state);
             }
 
-            if(defaults.redirectUri == 'postmessage'){
+            if(defaults.redirectUri === 'postmessage'){
               // Register the relevant post message options
               defaults.proxy = 'oauth2relay' + Math.floor(Math.random() * 100000);
               defaults.origin = (window.location.origin || 
@@ -592,16 +595,14 @@
               return oauth2.exchangeForToken(oauthData, userData);
             };
 
-            if(defaults.redirectUri == 'postmessage'){
+            if(defaults.redirectUri === 'postmessage'){
               return popup.open(url, defaults.name, defaults.popupOptions, defaults.redirectUri)
                 .handlePostMessage(defaults.origin, defaults.proxy, options)
                 .then(validateAndExchange);
             }
-            else {
-              return popup.open(url, defaults.name, defaults.popupOptions, defaults.redirectUri)
-                .pollPopup()
-                .then(validateAndExchange);
-            }
+            return popup.open(url, defaults.name, defaults.popupOptions, defaults.redirectUri)
+              .pollPopup()
+              .then(validateAndExchange);
           };
 
           oauth2.exchangeForToken = function(oauthData, userData) {
@@ -823,7 +824,7 @@
           proxy_frame.style.width = "1px"; 
           proxy_frame.style.height = "1px"; 
           proxy_frame.style.position = "absolute"; 
-          proxy_frame.style.top = "-100px;"
+          proxy_frame.style.top = "-100px;";
           document.body.appendChild(proxy_frame);
 
           var destroyProxyFrame = function(proxy_id){
@@ -844,7 +845,6 @@
               }
               // we do not detach the event handler here as
               // an initial emtpy message is posted  (check the initial post)
-              return;
             } 
             catch(err){
               _main.off('message', eventHandler);
@@ -962,14 +962,13 @@
             var parts = utils.parseUrl(data.a[0]);
             if(parts.params === undefined || parts.params.error){
               throw parts.params.error;
-            } else {
-              return {
-                code: parts.params.code,
-                //state: parts.params.session_state, postmessage state
-                hd: parts.params.hd,
-                authuser: parts.params.authuser
-              }
             }
+            return {
+              code: parts.params.code,
+              //state: parts.params.session_state, postmessage state
+              hd: parts.params.hd,
+              authuser: parts.params.authuser
+            };
           }
         };
 
@@ -982,40 +981,41 @@
         return postmessage;
     }])
     .factory('satellizer.storage', ['satellizer.config', function(config) {
+      var ret;
       switch (config.storage) {
         case 'localStorage':
-          if ('localStorage' in window && window['localStorage'] !== null) {
-            return {
+          if ('localStorage' in window && window.localStorage !== null) {
+            ret = {
               get: function(key) { return localStorage.getItem(key); },
               set: function(key, value) { return localStorage.setItem(key, value); },
               remove: function(key) { return localStorage.removeItem(key); }
             };
           } else {
             console.warn('Warning: Local Storage is disabled or unavailable. Satellizer will not work correctly.');
-            return {
+            ret = {
               get: function(key) { return undefined; },
               set: function(key, value) { return undefined; },
               remove: function(key) { return undefined; }
             };
           }
-          break;
+          return ret;
 
         case 'sessionStorage':
-          if ('sessionStorage' in window && window['sessionStorage'] !== null) {
-            return {
+          if ('sessionStorage' in window && window.sessionStorage !== null) {
+            ret = {
               get: function(key) { return sessionStorage.getItem(key); },
               set: function(key, value) { return sessionStorage.setItem(key, value); },
               remove: function(key) { return sessionStorage.removeItem(key); }
             };
           } else {
             console.warn('Warning: Session Storage is disabled or unavailable. Satellizer will not work correctly.');
-            return {
+            ret = {
               get: function(key) { return undefined; },
               set: function(key, value) { return undefined; },
               remove: function(key) { return undefined; }
             };
           }
-          break;
+          return ret;
       }
     }])
     .factory('satellizer.interceptor', [
@@ -1076,7 +1076,7 @@
       }
     }]);
 
-})(window, window.angular);
+}(window, window.angular));
 
 // Base64.js Polyfill (@davidchambers)
 (function() {
@@ -1087,13 +1087,13 @@
     this.message = message;
   }
 
-  InvalidCharacterError.prototype = new Error;
+  InvalidCharacterError.prototype = new Error();
   InvalidCharacterError.prototype.name = 'InvalidCharacterError';
 
   object.btoa || (
     object.btoa = function(input) {
-      var str = String(input);
-      for (var block, charCode, idx = 0, map = chars, output = ''; str.charAt(idx | 0) || (map = '=', idx % 1); output += map.charAt(63 & block >> 8 - idx % 1 * 8)) {
+      var str = String(input), block, charCode, idx, map, output;
+      for (idx = 0, map = chars, output = ''; str.charAt(idx | 0) || (map = '=', idx % 1); output += map.charAt(63 & block >> 8 - idx % 1 * 8)) {
         charCode = str.charCodeAt(idx += 3 / 4);
         if (charCode > 0xFF) {
           throw new InvalidCharacterError("'btoa' failed: The string to be encoded contains characters outside of the Latin1 range.");
