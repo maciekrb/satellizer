@@ -124,7 +124,7 @@
         }
       }
     })
-    .factory('satellizer.messaging', function ($timeout) {
+    .factory('satellizer.messaging', ['$timeout', function ($timeout) {
       var _callbacks = {};
 
       return {
@@ -177,7 +177,7 @@
           return this;
         }
       };
-    })
+    }])
     .provider('$auth', ['satellizer.config', function(config) {
       Object.defineProperties(this, {
         baseUrl: {
@@ -832,6 +832,8 @@
             if(e){ document.body.removeChild(e); }
           };
 
+          var _main = angular.element($window);
+
           // postmessage event handling function on the
           // main window
           var eventHandler = function(ev){
@@ -853,7 +855,6 @@
             } 
           };
 
-          var _main = angular.element($window);
           _main.on('message', eventHandler);
 
           polling = $interval(function(){
@@ -984,11 +985,11 @@
       var ret;
       switch (config.storage) {
         case 'localStorage':
-          if ('localStorage' in window && window.localStorage !== null) {
+          if (window.localStorage !== undefined && window.localStorage !== null) {
             ret = {
-              get: function(key) { return localStorage.getItem(key); },
-              set: function(key, value) { return localStorage.setItem(key, value); },
-              remove: function(key) { return localStorage.removeItem(key); }
+              get: function(key) { return window.localStorage.getItem(key); },
+              set: function(key, value) { return window.localStorage.setItem(key, value); },
+              remove: function(key) { return window.localStorage.removeItem(key); }
             };
           } else {
             console.warn('Warning: Local Storage is disabled or unavailable. Satellizer will not work correctly.');
@@ -1001,11 +1002,11 @@
           return ret;
 
         case 'sessionStorage':
-          if ('sessionStorage' in window && window.sessionStorage !== null) {
+          if (window.sessionStorage !== undefined && window.sessionStorage !== null) {
             ret = {
-              get: function(key) { return sessionStorage.getItem(key); },
-              set: function(key, value) { return sessionStorage.setItem(key, value); },
-              remove: function(key) { return sessionStorage.removeItem(key); }
+              get: function(key) { return window.sessionStorage.getItem(key); },
+              set: function(key, value) { return window.sessionStorage.setItem(key, value); },
+              remove: function(key) { return window.sessionStorage.removeItem(key); }
             };
           } else {
             console.warn('Warning: Session Storage is disabled or unavailable. Satellizer will not work correctly.');
@@ -1050,7 +1051,7 @@
       '$q',
       'satellizer.config',
       'satellizer.messaging', 
-      function authinterceptor($q, config, messaging) {
+      function($q, config, messaging) {
         /**
         * Set to true to intercept 401 Unauthorized responses
         * Based on angular_devise interceptor by jridgewell 
